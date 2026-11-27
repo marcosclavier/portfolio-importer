@@ -1,7 +1,9 @@
 import { redactSecrets, type SecretHit } from "./secrets.js";
-import { DEFAULT_LIMITS, LANGUAGE_BY_EXT, type FileEntry, type Limits, type Role, type Selection, type SkipReason } from "./select.js";
+import { DEFAULT_LIMITS, LANGUAGE_BY_EXT, TREE_MAX, treeOverview, type FileEntry, type Limits, type Profile, type Role, type Selection, type SkipReason } from "./select.js";
 
 export const DIGEST_FORMAT = "portfolio-digest/1";
+/** A digest made with the demo profile. Its own format, so it can't be mistaken for an import digest. */
+export const DEMO_DIGEST_FORMAT = "portfolio-demo-digest/1";
 
 export type RepoMeta = {
   /** "owner/name" on GitHub, or the folder or package name locally */
@@ -12,11 +14,13 @@ export type RepoMeta = {
   createdAt?: string;
   pushedAt?: string;
   topics?: string[];
+  /** Demo profile only: the account that owns the repository, so its name can be kept out of the demo */
+  owner?: string;
 };
 
 /** What may be sent on: a description of the repository plus excerpts with secrets removed. */
 export type Digest = {
-  format: typeof DIGEST_FORMAT;
+  format: typeof DIGEST_FORMAT | typeof DEMO_DIGEST_FORMAT;
   repo: RepoMeta;
   /** Share of source bytes per language, largest first */
   languages: { language: string; share: number }[];
@@ -24,12 +28,16 @@ export type Digest = {
   layout: { dir: string; files: number }[];
   stats: { files: number; testFiles: number; bytes: number };
   files: { path: string; role: Role; content: string; truncated: boolean }[];
+  /** Demo profile only: the file list (paths, no contents), so the model sees the project's shape */
+  tree?: string[];
 };
 
 /** Everything the importer did with a repository, for the member to check. Never holds file contents. */
 export type Receipt = {
   repo: string;
   createdAt: string;
+  /** Set for a demo read */
+  profile?: Profile;
   read: { path: string; role: Role; bytes: number; charsKept: number; truncated: boolean; linesRemoved: number }[];
   neverRead: { path: string }[];
   skipped: Partial<Record<SkipReason, number>>;
@@ -105,16 +113,18 @@ export function buildDigest(
     }
     // Redact the whole file before cutting it, so a key split across the cut can't survive.
     const red = redactSecrets(raw);
-    const truncated = red.text.length > limits.maxFileChars;
-    const content = truncated ? red.text.slice(0, limits.maxFileChars) : red.text;
+    const keep = Math.min(limits.maxFileChars, p.cut ?? Infinity);
+    const truncated = red.text.length > keep;
+    const content = truncated ? red.text.slice(0, keep) : red.text;
     for (const h of red.hits) secrets.push({ path: p.path, ...h });
     files.push({ path: p.path, role: p.role, content, truncated });
     read.push({ path: p.path, role: p.role, bytes: p.size, charsKept: content.length, truncated, linesRemoved: red.linesRemoved });
     charsKept += content.length;
   }
 
+  const demo = limits.profile === "demo";
   const digest: Digest = {
-    format: DIGEST_FORMAT,
+    format: demo ? DEMO_DIGEST_FORMAT : DIGEST_FORMAT,
     repo: meta,
     languages: languages(tree),
     layout: layout(tree),
@@ -124,10 +134,12 @@ export function buildDigest(
       bytes: tree.reduce((n, f) => n + f.size, 0),
     },
     files,
+    ...(demo ? { tree: treeOverview(tree) } : {}),
   };
   const receipt: Receipt = {
     repo: meta.name,
     createdAt: new Date().toISOString(),
+    ...(demo ? { profile: "demo" as const } : {}),
     read,
     neverRead: selection.neverRead.map((f) => ({ path: f.path })),
     skipped,
@@ -153,6 +165,7 @@ export function digestToPrompt(d: Digest): string {
     `<languages>${d.languages.map((l) => `${l.language} ${l.share}%`).join(", ")}</languages>`,
     `<layout>${d.layout.map((l) => `${attr(l.dir)} (${l.files} files)`).join(", ")}</layout>`,
     `<stats>${d.stats.files} files, ${d.stats.testFiles} test files</stats>`,
+    d.tree?.length ? `<file_list>\n${fence(d.tree.join("\n"))}${d.tree.length >= TREE_MAX ? "\n… and more" : ""}\n</file_list>` : "",
     ...d.files.map((f) => `<file path="${attr(f.path)}" role="${f.role}"${f.truncated ? ' truncated="true"' : ""}>\n${fence(f.content)}\n</file>`),
     `</repository>`,
   ]

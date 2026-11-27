@@ -10,6 +10,7 @@ const run = promisify(execFile);
 /**
  * Reads a repository on this machine. Only files git tracks are considered, so anything in
  * .gitignore (build output, local .env files) is never even listed. Symbolic links aren't followed.
+ * Pass DEMO_LIMITS for the demo profile.
  */
 export async function readLocalRepo(dir: string, limits: Limits = DEFAULT_LIMITS): Promise<{ digest: Digest; receipt: Receipt }> {
   const root = await realpath(dir);
@@ -39,7 +40,24 @@ export async function readLocalRepo(dir: string, limits: Limits = DEFAULT_LIMITS
   }
 
   const meta = await localMeta(root);
+  if (limits.profile === "demo") {
+    const owner = await remoteOwner(root);
+    if (owner) meta.owner = owner;
+  }
   return buildDigest(meta, tree, selection, contents, limits);
+}
+
+/**
+ * The account in the "origin" remote's URL (github.com/<owner>/<repo>), read from the local git
+ * config without any network request. Only the owner is taken, so a token in the URL never is.
+ */
+async function remoteOwner(root: string): Promise<string | undefined> {
+  try {
+    const url = (await run("git", ["-C", root, "remote", "get-url", "origin"])).stdout.trim();
+    return url.match(/(?:github\.com|gitlab\.com|bitbucket\.org)[:/]([A-Za-z0-9][A-Za-z0-9_.-]{0,38})\/[^/]+$/)?.[1];
+  } catch {
+    return undefined; // No remote.
+  }
 }
 
 async function localMeta(root: string): Promise<RepoMeta> {

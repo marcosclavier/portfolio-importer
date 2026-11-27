@@ -1,6 +1,8 @@
 import { type SecretHit } from "./secrets.js";
-import { type FileEntry, type Limits, type Role, type Selection, type SkipReason } from "./select.js";
+import { type FileEntry, type Limits, type Profile, type Role, type Selection, type SkipReason } from "./select.js";
 export declare const DIGEST_FORMAT = "portfolio-digest/1";
+/** A digest made with the demo profile. Its own format, so it can't be mistaken for an import digest. */
+export declare const DEMO_DIGEST_FORMAT = "portfolio-demo-digest/1";
 export type RepoMeta = {
     /** "owner/name" on GitHub, or the folder or package name locally */
     name: string;
@@ -10,10 +12,12 @@ export type RepoMeta = {
     createdAt?: string;
     pushedAt?: string;
     topics?: string[];
+    /** Demo profile only: the account that owns the repository, so its name can be kept out of the demo */
+    owner?: string;
 };
 /** What may be sent on: a description of the repository plus excerpts with secrets removed. */
 export type Digest = {
-    format: typeof DIGEST_FORMAT;
+    format: typeof DIGEST_FORMAT | typeof DEMO_DIGEST_FORMAT;
     repo: RepoMeta;
     /** Share of source bytes per language, largest first */
     languages: {
@@ -36,11 +40,15 @@ export type Digest = {
         content: string;
         truncated: boolean;
     }[];
+    /** Demo profile only: the file list (paths, no contents), so the model sees the project's shape */
+    tree?: string[];
 };
 /** Everything the importer did with a repository, for the member to check. Never holds file contents. */
 export type Receipt = {
     repo: string;
     createdAt: string;
+    /** Set for a demo read */
+    profile?: Profile;
     read: {
         path: string;
         role: Role;

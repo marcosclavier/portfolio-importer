@@ -1,6 +1,6 @@
 {
   "name": "portfolio-importer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reads a code repository the way Portfolio Studio does: picks a small set of files, never opens secret-prone ones, removes secrets from the rest, and writes a receipt of everything it read.",
   "license": "MIT",
   "type": "module",

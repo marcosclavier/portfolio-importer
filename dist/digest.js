@@ -1,6 +1,8 @@
 import { redactSecrets } from "./secrets.js";
-import { DEFAULT_LIMITS, LANGUAGE_BY_EXT } from "./select.js";
+import { DEFAULT_LIMITS, LANGUAGE_BY_EXT, TREE_MAX, treeOverview } from "./select.js";
 export const DIGEST_FORMAT = "portfolio-digest/1";
+/** A digest made with the demo profile. Its own format, so it can't be mistaken for an import digest. */
+export const DEMO_DIGEST_FORMAT = "portfolio-demo-digest/1";
 const TEST_PATH = /(^|\/)(__tests__|tests?|spec|specs|e2e|cypress|playwright)\/|\.(test|spec)\.[a-z0-9]+$|_test\.(go|py|rb|exs)$|(^|\/)test_[^/]+\.py$/i;
 const EXCLUDED_FROM_STATS = /(^|\/)(node_modules|vendor|dist|build|out|\.next|coverage|target|__pycache__|\.venv|venv|\.git)\//;
 function languages(tree) {
@@ -59,16 +61,18 @@ export function buildDigest(meta, tree, selection, contents, limits = DEFAULT_LI
         }
         // Redact the whole file before cutting it, so a key split across the cut can't survive.
         const red = redactSecrets(raw);
-        const truncated = red.text.length > limits.maxFileChars;
-        const content = truncated ? red.text.slice(0, limits.maxFileChars) : red.text;
+        const keep = Math.min(limits.maxFileChars, p.cut ?? Infinity);
+        const truncated = red.text.length > keep;
+        const content = truncated ? red.text.slice(0, keep) : red.text;
         for (const h of red.hits)
             secrets.push({ path: p.path, ...h });
         files.push({ path: p.path, role: p.role, content, truncated });
         read.push({ path: p.path, role: p.role, bytes: p.size, charsKept: content.length, truncated, linesRemoved: red.linesRemoved });
         charsKept += content.length;
     }
+    const demo = limits.profile === "demo";
     const digest = {
-        format: DIGEST_FORMAT,
+        format: demo ? DEMO_DIGEST_FORMAT : DIGEST_FORMAT,
         repo: meta,
         languages: languages(tree),
         layout: layout(tree),
@@ -78,10 +82,12 @@ export function buildDigest(meta, tree, selection, contents, limits = DEFAULT_LI
             bytes: tree.reduce((n, f) => n + f.size, 0),
         },
         files,
+        ...(demo ? { tree: treeOverview(tree) } : {}),
     };
     const receipt = {
         repo: meta.name,
         createdAt: new Date().toISOString(),
+        ...(demo ? { profile: "demo" } : {}),
         read,
         neverRead: selection.neverRead.map((f) => ({ path: f.path })),
         skipped,
@@ -105,6 +111,7 @@ export function digestToPrompt(d) {
         `<languages>${d.languages.map((l) => `${l.language} ${l.share}%`).join(", ")}</languages>`,
         `<layout>${d.layout.map((l) => `${attr(l.dir)} (${l.files} files)`).join(", ")}</layout>`,
         `<stats>${d.stats.files} files, ${d.stats.testFiles} test files</stats>`,
+        d.tree?.length ? `<file_list>\n${fence(d.tree.join("\n"))}${d.tree.length >= TREE_MAX ? "\n… and more" : ""}\n</file_list>` : "",
         ...d.files.map((f) => `<file path="${attr(f.path)}" role="${f.role}"${f.truncated ? ' truncated="true"' : ""}>\n${fence(f.content)}\n</file>`),
         `</repository>`,
     ]

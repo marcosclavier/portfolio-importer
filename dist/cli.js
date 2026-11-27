@@ -3,7 +3,7 @@ import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { readLocalRepo } from "./local.js";
-import { DEFAULT_LIMITS } from "./select.js";
+import { DEFAULT_LIMITS, DEMO_LIMITS } from "./select.js";
 const HELP = `Usage: npx github:marcosclavier/portfolio-importer [folder] [options]
 
 Builds a digest of a git repository on this machine, for importing into Portfolio Studio
@@ -11,15 +11,19 @@ without giving it access to your code. Nothing is sent anywhere: it writes one f
 can read, then upload yourself.
 
 Options
-  --out <file>   Where to write the digest (default: portfolio-digest.json)
+  --out <file>   Where to write the digest (default: portfolio-digest.json,
+                 or portfolio-demo-digest.json with --demo)
   --no-source    Only the README, docs and manifests; no source files
+  --demo         The deeper read Studio's demo builder uses: up to 150 files,
+                 favouring styles, pages, components, data models and prompts
   -h, --help     Show this help
 `;
 const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
-        out: { type: "string", default: "portfolio-digest.json" },
+        out: { type: "string" },
         "no-source": { type: "boolean", default: false },
+        demo: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
     },
 });
@@ -27,11 +31,16 @@ if (values.help) {
     process.stdout.write(HELP);
     process.exit(0);
 }
+if (values.demo && values["no-source"]) {
+    process.stderr.write("--demo needs the source files (the screens are in them), so it can't be used with --no-source.\n");
+    process.exit(1);
+}
 const dir = resolve(positionals[0] ?? ".");
-const limits = { ...DEFAULT_LIMITS, includeSource: !values["no-source"] };
+const limits = values.demo ? DEMO_LIMITS : { ...DEFAULT_LIMITS, includeSource: !values["no-source"] };
+const outFile = values.out ?? (values.demo ? "portfolio-demo-digest.json" : "portfolio-digest.json");
 try {
     const { digest, receipt } = await readLocalRepo(dir, limits);
-    const out = resolve(values.out);
+    const out = resolve(outFile);
     await writeFile(out, JSON.stringify({ digest, receipt }, null, 2) + "\n");
     const kb = (n) => `${(n / 1024).toFixed(1)} KB`;
     const lines = [
@@ -47,7 +56,9 @@ try {
     const skipped = Object.entries(receipt.skipped).map(([reason, n]) => `${n} ${reason}`);
     if (skipped.length)
         lines.push("", `Skipped: ${skipped.join(", ")}.`);
-    lines.push("", `Wrote ${out}`, "Read it, then upload it in Studio: Projects, Import, From your computer.");
+    lines.push("", `Wrote ${out}`, values.demo
+        ? "Read it, then upload it in Studio when you build a demo of this project."
+        : "Read it, then upload it in Studio: Projects, Import, From your computer.");
     process.stdout.write(lines.join("\n") + "\n");
 }
 catch (e) {

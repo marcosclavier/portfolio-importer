@@ -3,6 +3,7 @@ import { DEFAULT_LIMITS, selectFiles } from "./select.js";
 /**
  * Reads a GitHub repository with a token the member gave us. Only three read-only endpoints are
  * called: the repository's details, its file list, and the raw contents of each selected file.
+ * Pass `limits: DEMO_LIMITS` for the demo profile.
  */
 export class GithubError extends Error {
     status;
@@ -52,7 +53,8 @@ export async function readGithubRepo(fullName, token, opts = {}) {
             }
         }
     };
-    await Promise.all(Array.from({ length: opts.concurrency ?? 4 }, worker));
+    // The demo profile reads up to 150 files, so it asks for more of them at once.
+    await Promise.all(Array.from({ length: opts.concurrency ?? (limits.profile === "demo" ? 8 : 4) }, worker));
     const meta = {
         name: repo.full_name,
         description: repo.description ?? "",
@@ -61,6 +63,7 @@ export async function readGithubRepo(fullName, token, opts = {}) {
         createdAt: repo.created_at,
         pushedAt: repo.pushed_at,
         topics: repo.topics ?? [],
+        ...(limits.profile === "demo" && repo.owner?.login ? { owner: repo.owner.login } : {}),
     };
     return buildDigest(meta, tree, selection, contents, limits, { treeTruncated: treeRes.truncated });
 }
