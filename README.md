@@ -14,7 +14,7 @@ The result is a *digest*: the repository's description, languages, layout, file 
 
 ## The demo read
 
-Studio's demo builder (in development, not open to members yet) makes a working scale model of a project from a description it writes, with made-up sample data. To describe the screens, it needs to see more of the app than an import does, so it uses a second, deeper read: the *demo profile* (`DEMO_LIMITS` in [`src/select.ts`](src/select.ts)). It runs only when you ask for a demo, never on import.
+Studio's demo builder (part of the Pro plan) makes a working scale model of a project from a description it writes, with made-up sample data. To describe the screens, it needs to see more of the app than an import does, so it uses a second, deeper read: the *demo profile* (`DEMO_LIMITS` in [`src/select.ts`](src/select.ts)). It runs only when you ask for a demo, never on import.
 
 - **The same rules 1, 2, 4 and 5 apply**: secret-prone files are never opened, secrets are removed from what is read, and you get the same receipt.
 - **More is skipped**: data files, dumps and seed folders (`*.csv`, `*.sql`, logs, notebooks, `data/`, `seeds/`, `fixtures/`…), because real records live there; database migrations; and infrastructure (CI workflows, Docker files, deploy and build-tool config).
@@ -32,14 +32,14 @@ npx github:marcosclavier/portfolio-importer --no-source   # README, docs and man
 npx github:marcosclavier/portfolio-importer --demo        # the demo read; writes portfolio-demo-digest.json
 ```
 
-Read `portfolio-digest.json`, then upload it in Studio under Projects, Import, From your computer. Studio runs the secret check again on what you upload. A demo digest is uploaded when you build a demo, once the demo builder opens.
+Read `portfolio-digest.json`, then upload it in Studio under Projects, Import, From your computer. Studio runs the secret check again on what you upload. For a demo, run it with `--demo` and upload `portfolio-demo-digest.json` when you start the demo in Studio.
 
 ## How Portfolio Studio uses it
 
 - **Public repositories** are read with your GitHub sign-in token, which GitHub limits to public data.
 - **Private repositories** are read only through the Portfolio Studio GitHub App, which you install on the repositories you choose. It asks for read-only access to their contents (plus the read-only metadata GitHub requires of every app) and nothing else, its tokens expire after 8 hours, and uninstalling it ends access. Repositories owned by an organization need the owner's approval.
 - The digest is sent to Claude to draft a project description. Your code is not stored: Studio keeps the draft you confirm and the receipt, nothing else.
-- For a demo, the demo digest is sent to Claude to plan and describe the demo. Your code is not stored either: Studio keeps the demo's description (with made-up sample data), its plan, the receipt, and the names and words to keep out of it.
+- For a demo, the demo digest is sent to Claude to plan and describe the demo. Your code is not stored either: Studio keeps the demo's description (with made-up sample data), its plan, the receipt for its latest read, and the names and words to keep out of it.
 
 You can't verify from outside what any hosted service runs. That's why the command above exists: with it, your code never reaches us at all.
 
