@@ -14,7 +14,7 @@ The result is a *digest*: the repository's description, languages, layout, file 
 
 ## The demo read
 
-Studio's demo builder (part of the Pro plan) makes a working scale model of a project from a description it writes, with made-up sample data. To describe the screens, it needs to see more of the app than an import does, so it uses a second, deeper read: the *demo profile* (`DEMO_LIMITS` in [`src/select.ts`](src/select.ts)). It runs only when you ask for a demo, never on import.
+Studio's demo builder makes a working scale model of a project from a description it writes, with made-up sample data. To describe the screens, it needs to see more of the app than an import does, so it uses a second, deeper read: the *demo profile* (`DEMO_LIMITS` in [`src/select.ts`](src/select.ts)). It runs only when you ask for a demo, never on import.
 
 - **The same rules 1, 2, 4 and 5 apply**: secret-prone files are never opened, secrets are removed from what is read, and you get the same receipt.
 - **More is skipped**: data files, dumps and seed folders (`*.csv`, `*.sql`, logs, notebooks, `data/`, `seeds/`, `fixtures/`…), because real records live there; database migrations; and infrastructure (CI workflows, Docker files, deploy and build-tool config).
